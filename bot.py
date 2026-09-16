@@ -51,13 +51,17 @@ print("✅ Настройки для Baccarat загружены", flush=True)
 # =====================================================================
 # ФУНКЦИИ
 # =====================================================================
-def get_game_number():
-    """Номер игры от 1 до 1440 (каждую минуту, старт в 03:00)"""
-    now = datetime.now(MOSCOW_TZ)
-    start = now.replace(hour=3, minute=0, second=0, microsecond=0)
-    if now < start:
+def get_game_number_from_ts(start_ts):
+    """Номер игры от 1 до 1440 по времени старта (startTs)"""
+    if not start_ts:
+        return get_game_number()  # fallback
+    
+    # startTs — Unix timestamp
+    dt = datetime.fromtimestamp(start_ts, tz=MOSCOW_TZ)
+    start = dt.replace(hour=3, minute=0, second=0, microsecond=0)
+    if dt < start:
         start = start - timedelta(days=1)
-    diff_minutes = (now - start).total_seconds() / 60
+    diff_minutes = (dt - start).total_seconds() / 60
     game_number = int(diff_minutes) % 1440 + 1
     return int(game_number)
 
@@ -273,8 +277,8 @@ def main():
                 # ===== ОЖИДАНИЕ ИГРЫ (когда карт нет) =====
                 if not player_cards and not dealer_cards:
                     if game_id not in game_numbers:
-                        game_numbers[game_id] = get_game_number()
-                    game_number = game_numbers[game_id]
+    start_ts = game.get("startTs", 0)
+    game_numbers[game_id] = get_game_number_from_ts(start_ts)
                     
                     if game_id not in messages:
                         msg = f"⏳ Ожидание игры #N{game_number} (ID: {game_id})"
