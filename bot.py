@@ -37,7 +37,7 @@ dealer_cards_history = {}
 game_state_history = {}
 
 SUITS_NAMES = {0: "♠️", 1: "♣️", 2: "♦️", 3: "♥️"}
-RANKS = {1: "A", 2: "2", 3: "3", 4: "4", 5: "5", 6: "6", 7: "7", 8: "8", 9: "9", 10: "10", 11: "J", 12: "Q", 13: "K"}
+RANKS = {1: "A", 2: "2", 3: "3", 4: "4", 5: "5", 6: "6", 7: "7", 8: "8", 9: "9", 10: "10", 11: "J", 12: "Q", 13: "K", 14: "A"}
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -93,7 +93,7 @@ def get_active_games():
     return []
 
 def parse_cards(value_str):
-    """Парсит карты из JSON строки. Возвращает список dict."""
+    """Парсит карты из JSON строки"""
     if not value_str or value_str == "[]":
         return []
     try:
@@ -128,7 +128,7 @@ def calculate_score(cards):
         if not isinstance(c, dict):
             continue
         r = c.get("R", 0)
-        if r == 1:
+        if r == 1 or r == 14:   # Туз (1 или 14) = 1 очко
             score += 1
         elif 2 <= r <= 9:
             score += r
@@ -147,11 +147,19 @@ def is_game_finished(state, player_cards, dealer_cards, p_score, d_score):
         return False
     
     # Игра завершена
-    if state_str in ("finished", "gameover", "endgame", "result"):
+    if state_str in ("finished", "gameover", "endgame", "result", "resultgame", "completed"):
         return True
     
-    # DealerMove — игра ещё идёт
+    # DealerMove — если у кого-то 8 или 9 (натуральная победа), завершаем
     if state_str == "dealermove":
+        if p_score >= 8 or d_score >= 8:
+            return True
+        return False
+    
+    # PlayerMove
+    if state_str == "playermove":
+        if p_score >= 8 or d_score >= 8:
+            return True
         return False
     
     return False
@@ -163,7 +171,7 @@ def get_arrow(state):
     state_str = str(state).lower().strip()
     if state_str == "prematch":
         return "◀️"
-    if state_str in ("finished", "gameover", "endgame", "result"):
+    if state_str in ("finished", "gameover", "endgame", "result", "resultgame", "completed"):
         return ""
     return "▶️"
 
@@ -184,7 +192,6 @@ def build_message(game_num, game_id, player_cards, dealer_cards, p_score, d_scor
         
         tag_str = " " + " ".join(tags) if tags else ""
         
-        # Определяем победителя
         if p_score > d_score:
             return f"#N{game_num} ✅{p_score} ({p_hand}) - {d_score} ({d_hand}) #П1 #T{total}{tag_str} (ID: {game_id})"
         elif d_score > p_score:
