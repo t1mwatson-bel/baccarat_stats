@@ -277,8 +277,8 @@ def main():
                 # ===== ОЖИДАНИЕ ИГРЫ (когда карт нет) =====
                 if not player_cards and not dealer_cards:
                     if game_id not in game_numbers:
-    start_ts = game.get("startTs", 0)
-    game_numbers[game_id] = get_game_number_from_ts(start_ts)
+                       start_ts = game.get("startTs", 0)
+                       game_numbers[game_id] = get_game_number_from_ts(start_ts)
                     
                     if game_id not in messages:
                         msg = f"⏳ Ожидание игры #N{game_number} (ID: {game_id})"
