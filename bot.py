@@ -51,91 +51,56 @@ print("✅ Настройки для Baccarat загружены", flush=True)
 # =====================================================================
 # ФУНКЦИИ
 # =====================================================================
-def get_game_data(game_id):
-    url = f"{BASE_URL}/service-api/LiveFeed/GetGameZip?id={game_id}&isSubGames=true&GroupEvents=true&countevents=250&grMode=4&partner=7&topGroups=&country=190&marketType=1&isNewBuilder=true"
-    try:
-        response = requests.get(url, headers=HEADERS, timeout=5)
-        if response.status_code == 200:
-            data = response.json()
-            # ✅ ДИАГНОСТИКА: ВЫВОДИМ ПОЛНЫЙ ОТВЕТ
-            print(f"🔍 [get_game_data] {game_id} ОТВЕТ: {json.dumps(data, ensure_ascii=False)[:2000]}", flush=True)
-            return data
-    except Exception as e:
-        print(f"❌ Ошибка игры {game_id}: {e}", flush=True)
-    return None
+def get_game_number():
+    """Номер игры от 1 до 1440 (каждую минуту, старт в 03:00)"""
+    now = datetime.now(MOSCOW_TZ)
+    start = now.replace(hour=3, minute=0, second=0, microsecond=0)
+    if now < start:
+        start = start - timedelta(days=1)
+    diff_minutes = (now - start).total_seconds() / 60
+    game_number = int(diff_minutes) % 1440 + 1
+    return int(game_number)
 
 def get_active_games():
     """Получает список активных игр Баккара"""
     try:
         url = f"{BASE_URL}/service-api/main-live-feed/v3/games1x2?cfView=3&count=40&fcountry=1&gr=2336&grMode=4&lng=ru&ref=1&selectedMs=1.236.2050671,10.236"
-        print(f"🔍 Запрос списка игр...", flush=True)
         response = requests.get(url, headers=HEADERS, timeout=10)
-        print(f"🔍 Статус API: {response.status_code}", flush=True)
         
         if response.status_code == 200:
             data = response.json()
-            print(f"🔍 Тип данных: {type(data).__name__}", flush=True)
             
             if isinstance(data, list):
                 games = data
-                print(f"📊 Формат: list, найдено: {len(games)}", flush=True)
             elif isinstance(data, dict) and "Value" in data:
                 games = data.get("Value", [])
-                print(f"📊 Формат: dict[Value], найдено: {len(games)}", flush=True)
             else:
-                print(f"⚠️ Неизвестный формат: {str(data)[:300]}", flush=True)
                 return []
-            
-            # Показываем все лиги, которые есть в списке
-            all_ligas = set()
-            for g in games:
-                liga_id = g.get("liga", {}).get("id")
-                if liga_id:
-                    all_ligas.add(liga_id)
-            print(f"📊 Лиги в ответе: {all_ligas}", flush=True)
             
             active_games = []
             for game in games:
-                liga_id = game.get("liga", {}).get("id")
-                if liga_id == 2050671:
+                if game.get("liga", {}).get("id") == 2050671:
                     game_id = game.get("id")
                     if game_id and str(game_id) not in processed_games:
                         active_games.append(game)
-                        sport_id = game.get("sport", {}).get("id")
-                        print(f"✅ Найдена игра Баккара: id={game_id}, sport={sport_id}, liga={liga_id}", flush=True)
             
-            print(f"📊 Игр Баккара (не обработанных): {len(active_games)}", flush=True)
             return active_games
         else:
             print(f"⚠️ Статус API: {response.status_code}", flush=True)
-            print(f"⚠️ Ответ: {response.text[:300]}", flush=True)
     except Exception as e:
-        print(f"❌ Ошибка get_active_games: {e}", flush=True)
-        import traceback
-        traceback.print_exc()
+        print(f"❌ Ошибка: {e}", flush=True)
     
     return []
 
-def get_game_data(game_id):
-    """Получает данные конкретной игры"""
-    url = f"{BASE_URL}/service-api/LiveFeed/GetGameZip?id={game_id}&isSubGames=true&GroupEvents=true&countevents=250&grMode=4&partner=7&topGroups=&country=190&marketType=1&isNewBuilder=true"
-    try:
-        response = requests.get(url, headers=HEADERS, timeout=5)
-        if response.status_code == 200:
-            return response.json()
-        else:
-            print(f"⚠️ Статус игры {game_id}: {response.status_code}", flush=True)
-    except Exception as e:
-        print(f"❌ Ошибка игры {game_id}: {e}", flush=True)
-    return None
-
 def parse_cards(value_str):
-    """Парсит карты из JSON строки"""
+    """Парсит карты из JSON строки. Возвращает список dict."""
     if not value_str or value_str == "[]":
         return []
     try:
         cards = json.loads(value_str)
-        return cards
+        if isinstance(cards, list):
+            return cards
+        return []
     except:
         return []
 
@@ -167,20 +132,27 @@ def calculate_score(cards):
             score += 1
         elif 2 <= r <= 9:
             score += r
+        # 10, 11, 12, 13 = 0
     return score % 10
 
 def is_game_finished(state, player_cards, dealer_cards, p_score, d_score):
     """Проверяет, завершена ли игра"""
-    if state:
-        state_str = str(state).lower().strip()
-        if state_str == "prematch":
-            return False
-        if state_str in ("finished", "gameover", "endgame", "result"):
-            return True
+    if not state:
+        return False
     
-    if player_cards and dealer_cards and len(player_cards) >= 2 and len(dealer_cards) >= 2:
-        if p_score >= 8 or d_score >= 8:
-            return True
+    state_str = str(state).lower().strip()
+    
+    # Prematch = до игры
+    if state_str == "prematch":
+        return False
+    
+    # Игра завершена
+    if state_str in ("finished", "gameover", "endgame", "result"):
+        return True
+    
+    # DealerMove — игра ещё идёт
+    if state_str == "dealermove":
+        return False
     
     return False
 
@@ -212,6 +184,7 @@ def build_message(game_num, game_id, player_cards, dealer_cards, p_score, d_scor
         
         tag_str = " " + " ".join(tags) if tags else ""
         
+        # Определяем победителя
         if p_score > d_score:
             return f"#N{game_num} ✅{p_score} ({p_hand}) - {d_score} ({d_hand}) #П1 #T{total}{tag_str} (ID: {game_id})"
         elif d_score > p_score:
@@ -276,18 +249,8 @@ def main():
                 if game_id in processed_games:
                     continue
                 
-                data = get_game_data(game_id)
-                if not data:
-                    print(f"⚠️ Нет данных для игры {game_id}", flush=True)
-                    continue
-                
-                value = data.get("Value", {})
-                if not isinstance(value, dict):
-                    print(f"⚠️ Value не dict для {game_id}", flush=True)
-                    continue
-                
-                # ===== ИЗВЛЕКАЕМ КАРТЫ ИЗ scores.statistic.main =====
-                scores = value.get("scores", {})
+                # ===== БЕРЁМ КАРТЫ ПРЯМО ИЗ СПИСКА ИГР =====
+                scores = game.get("scores", {})
                 statistic = scores.get("statistic", {})
                 main_stat = statistic.get("main", {})
                 
@@ -299,10 +262,6 @@ def main():
                 dealer_cards = parse_cards(b_raw)
                 
                 print(f"🃏 {game_id}: P={len(player_cards)} карт, B={len(dealer_cards)} карт, state={state}", flush=True)
-                if player_cards:
-                    print(f"   P_raw: {p_raw}", flush=True)
-                if dealer_cards:
-                    print(f"   B_raw: {b_raw}", flush=True)
                 
                 if not player_cards and not dealer_cards:
                     print(f"⏭️ {game_id}: карт пока нет", flush=True)
@@ -312,15 +271,14 @@ def main():
                     game_numbers[game_id] = get_game_number()
                 game_number = game_numbers[game_id]
                 
-                p1_str = json.dumps(player_cards)
-                p2_str = json.dumps(dealer_cards)
+                p1_str = json.dumps(player_cards, sort_keys=True)
+                p2_str = json.dumps(dealer_cards, sort_keys=True)
                 
                 cards_changed = (game_id not in player_cards_history or player_cards_history[game_id] != p1_str or
                                  game_id not in dealer_cards_history or dealer_cards_history[game_id] != p2_str)
                 state_changed = (game_id not in game_state_history or game_state_history[game_id] != state)
                 
                 if not cards_changed and not state_changed:
-                    print(f"⏭️ {game_id}: без изменений", flush=True)
                     continue
                 
                 player_cards_history[game_id] = p1_str
