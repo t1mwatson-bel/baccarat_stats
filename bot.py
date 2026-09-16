@@ -128,7 +128,7 @@ def calculate_score(cards):
         if not isinstance(c, dict):
             continue
         r = c.get("R", 0)
-        if r == 1 or r == 14:   # Туз (1 или 14) = 1 очко
+        if r == 1 or r == 14:   # Туз = 1
             score += 1
         elif 2 <= r <= 9:
             score += r
@@ -146,20 +146,16 @@ def is_game_finished(state, player_cards, dealer_cards, p_score, d_score):
     if state_str == "prematch":
         return False
     
-    # Игра завершена
+    # ✅ Игра завершена: Win1 (победил игрок), Win2 (победил банкир), Draw (ничья)
+    if state_str in ("win1", "win2", "draw"):
+        return True
+    
+    # На всякий случай — старые варианты
     if state_str in ("finished", "gameover", "endgame", "result", "resultgame", "completed"):
         return True
     
-    # DealerMove — если у кого-то 8 или 9 (натуральная победа), завершаем
-    if state_str == "dealermove":
-        if p_score >= 8 or d_score >= 8:
-            return True
-        return False
-    
-    # PlayerMove
-    if state_str == "playermove":
-        if p_score >= 8 or d_score >= 8:
-            return True
+    # DealerMove/PlayerMove — игра ещё идёт
+    if state_str in ("dealermove", "playermove"):
         return False
     
     return False
@@ -171,6 +167,9 @@ def get_arrow(state):
     state_str = str(state).lower().strip()
     if state_str == "prematch":
         return "◀️"
+    # Завершённые игры — без стрелки
+    if state_str in ("win1", "win2", "draw"):
+        return ""
     if state_str in ("finished", "gameover", "endgame", "result", "resultgame", "completed"):
         return ""
     return "▶️"
@@ -192,6 +191,7 @@ def build_message(game_num, game_id, player_cards, dealer_cards, p_score, d_scor
         
         tag_str = " " + " ".join(tags) if tags else ""
         
+        # Определяем победителя
         if p_score > d_score:
             return f"#N{game_num} ✅{p_score} ({p_hand}) - {d_score} ({d_hand}) #П1 #T{total}{tag_str} (ID: {game_id})"
         elif d_score > p_score:
@@ -270,8 +270,18 @@ def main():
                 
                 print(f"🃏 {game_id}: P={len(player_cards)} карт, B={len(dealer_cards)} карт, state={state}", flush=True)
                 
+                # ===== ОЖИДАНИЕ ИГРЫ (когда карт нет) =====
                 if not player_cards and not dealer_cards:
-                    print(f"⏭️ {game_id}: карт пока нет", flush=True)
+                    if game_id not in game_numbers:
+                        game_numbers[game_id] = get_game_number()
+                    game_number = game_numbers[game_id]
+                    
+                    if game_id not in messages:
+                        msg = f"⏳ Ожидание игры #N{game_number} (ID: {game_id})"
+                        msg_id = send_message(msg)
+                        if msg_id:
+                            messages[game_id] = msg_id
+                            print(f"📤 Ожидание игры {game_id} (№{game_number})", flush=True)
                     continue
                 
                 if game_id not in game_numbers:
