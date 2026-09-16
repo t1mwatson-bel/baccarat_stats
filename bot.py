@@ -54,10 +54,14 @@ print("✅ Настройки для Baccarat загружены", flush=True)
 def get_game_number_from_ts(start_ts):
     """Номер игры от 1 до 1440 по времени старта (startTs)"""
     if not start_ts:
-        return get_game_number()  # fallback
+        # Fallback — от текущего времени
+        dt = datetime.now(MOSCOW_TZ)
+    else:
+        try:
+            dt = datetime.fromtimestamp(int(start_ts), tz=MOSCOW_TZ)
+        except:
+            dt = datetime.now(MOSCOW_TZ)
     
-    # startTs — Unix timestamp
-    dt = datetime.fromtimestamp(start_ts, tz=MOSCOW_TZ)
     start = dt.replace(hour=3, minute=0, second=0, microsecond=0)
     if dt < start:
         start = start - timedelta(days=1)
@@ -150,11 +154,11 @@ def is_game_finished(state, player_cards, dealer_cards, p_score, d_score):
     if state_str == "prematch":
         return False
     
-    # ✅ Игра завершена: Win1 (победил игрок), Win2 (победил банкир), Draw (ничья)
+    # ✅ Игра завершена: Win1, Win2, Draw
     if state_str in ("win1", "win2", "draw"):
         return True
     
-    # На всякий случай — старые варианты
+    # Старые варианты на всякий случай
     if state_str in ("finished", "gameover", "endgame", "result", "resultgame", "completed"):
         return True
     
@@ -171,7 +175,6 @@ def get_arrow(state):
     state_str = str(state).lower().strip()
     if state_str == "prematch":
         return "◀️"
-    # Завершённые игры — без стрелки
     if state_str in ("win1", "win2", "draw"):
         return ""
     if state_str in ("finished", "gameover", "endgame", "result", "resultgame", "completed"):
@@ -195,7 +198,6 @@ def build_message(game_num, game_id, player_cards, dealer_cards, p_score, d_scor
         
         tag_str = " " + " ".join(tags) if tags else ""
         
-        # Определяем победителя
         if p_score > d_score:
             return f"#N{game_num} ✅{p_score} ({p_hand}) - {d_score} ({d_hand}) #П1 #T{total}{tag_str} (ID: {game_id})"
         elif d_score > p_score:
@@ -277,8 +279,9 @@ def main():
                 # ===== ОЖИДАНИЕ ИГРЫ (когда карт нет) =====
                 if not player_cards and not dealer_cards:
                     if game_id not in game_numbers:
-                       start_ts = game.get("startTs", 0)
-                       game_numbers[game_id] = get_game_number_from_ts(start_ts)
+                        start_ts = game.get("startTs", 0)
+                        game_numbers[game_id] = get_game_number_from_ts(start_ts)
+                    game_number = game_numbers[game_id]
                     
                     if game_id not in messages:
                         msg = f"⏳ Ожидание игры #N{game_number} (ID: {game_id})"
@@ -289,7 +292,8 @@ def main():
                     continue
                 
                 if game_id not in game_numbers:
-                    game_numbers[game_id] = get_game_number()
+                    start_ts = game.get("startTs", 0)
+                    game_numbers[game_id] = get_game_number_from_ts(start_ts)
                 game_number = game_numbers[game_id]
                 
                 p1_str = json.dumps(player_cards, sort_keys=True)
