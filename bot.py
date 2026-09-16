@@ -52,13 +52,13 @@ print("✅ Настройки для Baccarat загружены", flush=True)
 # ФУНКЦИИ
 # =====================================================================
 def get_game_number():
-    """Номер игры от 1 до 720 (каждые 2 минуты, старт в 03:00)"""
+    """Номер игры от 1 до 1440 (каждую минуту, старт в 03:00)"""
     now = datetime.now(MOSCOW_TZ)
     start = now.replace(hour=3, minute=0, second=0, microsecond=0)
     if now < start:
         start = start - timedelta(days=1)
     diff_minutes = (now - start).total_seconds() / 60
-    game_number = int(diff_minutes) / 2 % 720 + 1
+    game_number = int(diff_minutes) % 1440 + 1
     return int(game_number)
 
 def get_active_games():
