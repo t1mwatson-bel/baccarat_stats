@@ -51,15 +51,20 @@ print("✅ Настройки для Baccarat загружены", flush=True)
 # =====================================================================
 # СОХРАНЕНИЕ ЗАВЕРШЁННЫХ ИГР
 # =====================================================================
-LOG_FILE = 'baccarat_games.txt'
+LOG_FILE = 'baccarat_games.txt'      # человекочитаемый лог
+LOG_JSON = 'baccarat_games.json'     # структурированный лог
 
-def save_finished_game(msg_text):
+def save_finished_game(game_num, game_id, player_cards, dealer_cards, p_score, d_score, state):
+    # 1) Текстовая строка
     try:
+        msg_text = build_message(game_num, game_id, player_cards, dealer_cards, p_score, d_score, state)
         with open(LOG_FILE, 'a', encoding='utf-8') as f:
             f.write(msg_text + '\n')
         print(f"💾 Сохранено: {msg_text}", flush=True)
     except Exception as e:
-        print(f"❌ Ошибка сохранения: {e}", flush=True)
+        print(f"❌ Ошибка записи в {LOG_FILE}: {e}", flush=True)
+
+    # 2) JSON-запись
     try:
         record = {
             "game_num": game_num,
@@ -71,27 +76,29 @@ def save_finished_game(msg_text):
             "p_score": p_score,
             "d_score": d_score
         }
-        
-        # Загружаем существующий файл
-        if os.path.exists(LOG_FILE):
+
+        if os.path.exists(LOG_JSON):
             try:
-                with open(LOG_FILE, 'r', encoding='utf-8') as f:
+                with open(LOG_JSON, 'r', encoding='utf-8') as f:
                     data = json.load(f)
-            except:
+                if not isinstance(data, list):
+                    data = []
+            except Exception:
                 data = []
         else:
             data = []
-        
-        # Добавляем запись
-        data.append(record)
-        
-        # Сохраняем
-        with open(LOG_FILE, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        
-        print(f"💾 Игра №{game_num} сохранена в {LOG_FILE} (всего: {len(data)})", flush=True)
+
+        # защита от дублей
+        if not any(r.get("game_id") == game_id for r in data):
+            data.append(record)
+            tmp = LOG_JSON + '.tmp'
+            with open(tmp, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            os.replace(tmp, LOG_JSON)
+
+        print(f"💾 Игра №{game_num} сохранена в {LOG_JSON} (всего: {len(data)})", flush=True)
     except Exception as e:
-        print(f"❌ Ошибка сохранения игры: {e}", flush=True)
+        print(f"❌ Ошибка сохранения JSON: {e}", flush=True)
 
 # =====================================================================
 # ФУНКЦИИ
