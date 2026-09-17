@@ -49,12 +49,51 @@ HEADERS = {
 print("✅ Настройки для Baccarat загружены", flush=True)
 
 # =====================================================================
+# СОХРАНЕНИЕ ЗАВЕРШЁННЫХ ИГР
+# =====================================================================
+LOG_FILE = 'baccarat_games.json'
+
+def save_finished_game(game_num, game_id, player_cards, dealer_cards, p_score, d_score, state):
+    """Сохраняет завершённую игру в файл baccarat_games.json"""
+    try:
+        record = {
+            "game_num": game_num,
+            "game_id": game_id,
+            "timestamp": datetime.now(MOSCOW_TZ).strftime("%Y-%m-%d %H:%M:%S"),
+            "state": state,
+            "player_cards": player_cards,
+            "dealer_cards": dealer_cards,
+            "p_score": p_score,
+            "d_score": d_score
+        }
+        
+        # Загружаем существующий файл
+        if os.path.exists(LOG_FILE):
+            try:
+                with open(LOG_FILE, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+            except:
+                data = []
+        else:
+            data = []
+        
+        # Добавляем запись
+        data.append(record)
+        
+        # Сохраняем
+        with open(LOG_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        
+        print(f"💾 Игра №{game_num} сохранена в {LOG_FILE} (всего: {len(data)})", flush=True)
+    except Exception as e:
+        print(f"❌ Ошибка сохранения игры: {e}", flush=True)
+
+# =====================================================================
 # ФУНКЦИИ
 # =====================================================================
 def get_game_number_from_ts(start_ts):
     """Номер игры от 1 до 1440 по времени старта (startTs)"""
     if not start_ts:
-        # Fallback — от текущего времени
         dt = datetime.now(MOSCOW_TZ)
     else:
         try:
@@ -136,11 +175,10 @@ def calculate_score(cards):
         if not isinstance(c, dict):
             continue
         r = c.get("R", 0)
-        if r == 1 or r == 14:   # Туз = 1
+        if r == 1 or r == 14:
             score += 1
         elif 2 <= r <= 9:
             score += r
-        # 10, 11, 12, 13 = 0
     return score % 10
 
 def is_game_finished(state, player_cards, dealer_cards, p_score, d_score):
@@ -150,19 +188,15 @@ def is_game_finished(state, player_cards, dealer_cards, p_score, d_score):
     
     state_str = str(state).lower().strip()
     
-    # Prematch = до игры
     if state_str == "prematch":
         return False
     
-    # ✅ Игра завершена: Win1, Win2, Draw
     if state_str in ("win1", "win2", "draw"):
         return True
     
-    # Старые варианты на всякий случай
     if state_str in ("finished", "gameover", "endgame", "result", "resultgame", "completed"):
         return True
     
-    # DealerMove/PlayerMove — игра ещё идёт
     if state_str in ("dealermove", "playermove"):
         return False
     
@@ -325,6 +359,9 @@ def main():
                         print(f"📤 Новая игра {game_id}: {msg}", flush=True)
                 
                 if is_game_finished(state, player_cards, dealer_cards, p_score, d_score):
+                    # ✅ СОХРАНЯЕМ ИГРУ В ФАЙЛ
+                    save_finished_game(game_number, game_id, player_cards, dealer_cards, p_score, d_score, state)
+                    
                     processed_games.add(game_id)
                     print(f"🏁 Игра {game_id} завершена (state={state}, p_score={p_score}, d_score={d_score})", flush=True)
                 
