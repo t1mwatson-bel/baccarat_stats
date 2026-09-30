@@ -26,7 +26,9 @@ print(f"✅ BOT_TOKEN: {BOT_TOKEN[:5]}...", flush=True)
 print(f"✅ CHAT_ID: {CHAT_ID}", flush=True)
 
 MOSCOW_TZ = pytz.timezone('Europe/Moscow')
-BASE_URL = "https://1xlite-6308.pro"
+
+# ⚠️ ИСПРАВЛЕНО: живое зеркало вместо мёртвого 1xlite-6308.pro
+BASE_URL = "https://1xlite-36553.pro"
 
 API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 messages = {}
@@ -49,56 +51,9 @@ HEADERS = {
 print("✅ Настройки для Baccarat загружены", flush=True)
 
 # =====================================================================
-# СОХРАНЕНИЕ ЗАВЕРШЁННЫХ ИГР
+# СОХРАНЕНИЕ ЗАВЕРШЁННЫХ ИГР — ОТКЛЮЧЕНО
 # =====================================================================
-LOG_FILE = 'baccarat_games.txt'      # человекочитаемый лог
-LOG_JSON = 'baccarat_games.json'     # структурированный лог
-
-def save_finished_game(game_num, game_id, player_cards, dealer_cards, p_score, d_score, state):
-    # 1) Текстовая строка
-    try:
-        msg_text = build_message(game_num, game_id, player_cards, dealer_cards, p_score, d_score, state)
-        with open(LOG_FILE, 'a', encoding='utf-8') as f:
-            f.write(msg_text + '\n')
-        print(f"💾 Сохранено: {msg_text}", flush=True)
-    except Exception as e:
-        print(f"❌ Ошибка записи в {LOG_FILE}: {e}", flush=True)
-
-    # 2) JSON-запись
-    try:
-        record = {
-            "game_num": game_num,
-            "game_id": game_id,
-            "timestamp": datetime.now(MOSCOW_TZ).strftime("%Y-%m-%d %H:%M:%S"),
-            "state": state,
-            "player_cards": player_cards,
-            "dealer_cards": dealer_cards,
-            "p_score": p_score,
-            "d_score": d_score
-        }
-
-        if os.path.exists(LOG_JSON):
-            try:
-                with open(LOG_JSON, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                if not isinstance(data, list):
-                    data = []
-            except Exception:
-                data = []
-        else:
-            data = []
-
-        # защита от дублей
-        if not any(r.get("game_id") == game_id for r in data):
-            data.append(record)
-            tmp = LOG_JSON + '.tmp'
-            with open(tmp, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-            os.replace(tmp, LOG_JSON)
-
-        print(f"💾 Игра №{game_num} сохранена в {LOG_JSON} (всего: {len(data)})", flush=True)
-    except Exception as e:
-        print(f"❌ Ошибка сохранения JSON: {e}", flush=True)
+# ⚠️ Запись в baccarat_games.txt и baccarat_games.json ОТКЛЮЧЕНА.
 
 # =====================================================================
 # ФУНКЦИИ
@@ -285,6 +240,7 @@ def main():
     
     print("🔄 ПАРСЕР БАККАРА ЗАПУЩЕН (ЛАЙВ-РЕЖИМ)", flush=True)
     print("🕐 Игры каждую минуту, старт в 03:00", flush=True)
+    print(f"🌐 Зеркало: {BASE_URL}", flush=True)
     print("=" * 60, flush=True)
     
     cycle = 0
@@ -371,8 +327,8 @@ def main():
                         print(f"📤 Новая игра {game_id}: {msg}", flush=True)
                 
                 if is_game_finished(state, player_cards, dealer_cards, p_score, d_score):
-                    # ✅ СОХРАНЯЕМ ИГРУ В ФАЙЛ
-                    save_finished_game(game_number, game_id, player_cards, dealer_cards, p_score, d_score, state)
+                    # ⚠️ ЗАПИСЬ В ФАЙЛЫ ОТКЛЮЧЕНА
+                    # save_finished_game(...) — убрано
                     
                     processed_games.add(game_id)
                     print(f"🏁 Игра {game_id} завершена (state={state}, p_score={p_score}, d_score={d_score})", flush=True)
