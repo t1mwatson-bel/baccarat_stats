@@ -278,19 +278,11 @@ def main():
                 
                 print(f"🃏 {game_id}: P={len(player_cards)} карт, B={len(dealer_cards)} карт, state={state}", flush=True)
                 
-                # ===== ОЖИДАНИЕ ИГРЫ (когда карт нет) =====
+                # ===== ПРОПУСК ИГРЫ, ЕСЛИ КАРТ ЕЩЕ НЕТ (без отправки сообщения) =====
                 if not player_cards and not dealer_cards:
                     if game_id not in game_numbers:
                         start_ts = game.get("startTs", 0)
                         game_numbers[game_id] = get_game_number_from_ts(start_ts)
-                    game_number = game_numbers[game_id]
-                    
-                    if game_id not in messages:
-                        msg = f"⏳ Ожидание игры #N{game_number} (ID: {game_id})"
-                        msg_id = send_message(msg)
-                        if msg_id:
-                            messages[game_id] = msg_id
-                            print(f"📤 Ожидание игры {game_id} (№{game_number})", flush=True)
                     continue
                 
                 if game_id not in game_numbers:
