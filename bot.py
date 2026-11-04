@@ -1,9 +1,10 @@
+
 import os
 import sys
 import requests
 import json
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 import pytz
 
 # =====================================================================
@@ -11,7 +12,6 @@ import pytz
 # =====================================================================
 
 BOT_TOKEN = os.getenv("BOT_TOKEN") or os.getenv("BOT_TOKEN_PROGNOZ")
-
 CHAT_ID = os.getenv("CHAT_ID_21") or os.getenv("CHAT_ID")
 
 if not BOT_TOKEN or not CHAT_ID:
@@ -33,7 +33,7 @@ player_cards_history = {}
 dealer_cards_history = {}
 game_state_history = {}
 
-# Здесь хранятся номера уже обнаруженных игр
+# Номер каждой игры закрепляется за ее ID
 game_numbers = {}
 
 SUITS_NAMES = {
@@ -58,7 +58,7 @@ HEADERS = {
 }
 
 # =====================================================================
-# ЗАГРУЗКА И СОХРАНЕНИЕ НОМЕРОВ ИГР
+# ЗАГРУЗКА И СОХРАНЕНИЕ НОМЕРОВ
 # =====================================================================
 
 def load_game_numbers():
@@ -101,36 +101,29 @@ def save_game_numbers():
 
 
 # =====================================================================
-# РАСЧЕТ НОМЕРА ИГРЫ ПО МИНУТЕ МСК
+# НУМЕРАЦИЯ ПО ВРЕМЕНИ ПЕРВОГО ПОЯВЛЕНИЯ КАРТ
 # =====================================================================
 
 def get_current_game_number():
     dt = datetime.now(MOSCOW_TZ)
 
-    # 03:00 МСК = игра №1
-    # 03:01 МСК = игра №2
-    # 02:59 МСК = игра №1440
+    # 03:00 = #N1
+    # 03:01 = #N2
+    # 02:59 = #N1440
 
-    minutes = (
-        dt.hour * 60 +
-        dt.minute -
-        180
-    ) % 1440
+    minutes = (dt.hour * 60 + dt.minute - 180) % 1440
 
     return minutes + 1
 
 
 def get_game_number(game_id):
-    """
-    Если игра уже встречалась, возвращаем ее закрепленный номер.
-    Если новая — присваиваем номер текущей минуты МСК.
-    """
-
     game_id = str(game_id)
 
+    # Если номер уже присвоен, не меняем его
     if game_id in game_numbers:
         return int(game_numbers[game_id])
 
+    # Новая игра получает номер текущей минуты
     number = get_current_game_number()
 
     game_numbers[game_id] = number
@@ -138,7 +131,8 @@ def get_game_number(game_id):
     save_game_numbers()
 
     print(
-        f"🕒 Игра ID {game_id} закреплена за #N{number}",
+        f"🕒 Первые карты игры ID {game_id}. "
+        f"Присвоен номер #N{number}",
         flush=True
     )
 
@@ -364,7 +358,6 @@ def edit_message(message_id, text):
         if data.get("ok"):
             return True
 
-        # Telegram может ответить, что текст не изменился
         if "message is not modified" in str(data).lower():
             return True
 
@@ -384,8 +377,9 @@ def main():
     load_game_numbers()
 
     print("🔄 ПАРСЕР БАККАРА ЗАПУЩЕН", flush=True)
-    print("🕒 Нумерация: 03:00 МСК — #N1", flush=True)
-    print("🔁 Цикл: #N1 — #N1440", flush=True)
+    print("🕒 03:00 МСК — #N1", flush=True)
+    print("🔁 Цикл #N1 — #N1440", flush=True)
+    print("🃏 Номер присваивается при первом появлении карт", flush=True)
 
     while True:
         try:
@@ -399,12 +393,6 @@ def main():
 
                 game_id = str(game.get("id"))
 
-                # -------------------------------------------------
-                # НОМЕР ИГРЫ ЗАКРЕПЛЯЕТСЯ ЗА ID
-                # -------------------------------------------------
-
-                game_number = get_game_number(game_id)
-
                 main_stat = (
                     game.get("scores", {})
                     .get("statistic", {})
@@ -416,8 +404,18 @@ def main():
 
                 state = main_stat.get("S", "")
 
+                # -------------------------------------------------
+                # НОМЕР НЕ ПРИСВАИВАЕМ, ПОКА НЕТ КАРТ
+                # -------------------------------------------------
+
                 if not p_cards and not d_cards:
                     continue
+
+                # -------------------------------------------------
+                # ПЕРВОЕ ПОЯВЛЕНИЕ КАРТ — ПРИСВОЕНИЕ НОМЕРА
+                # -------------------------------------------------
+
+                game_number = get_game_number(game_id)
 
                 p1_str = json.dumps(
                     p_cards,
