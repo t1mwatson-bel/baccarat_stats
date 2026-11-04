@@ -51,28 +51,30 @@ HEADERS = {
 print("✅ Настройки для Baccarat загружены", flush=True)
 
 # =====================================================================
-# СОХРАНЕНИЕ ЗАВЕРШЁННЫХ ИГР — ОТКЛЮЧЕНО
-# =====================================================================
-# ⚠️ Запись в baccarat_games.txt и baccarat_games.json ОТКЛЮЧЕНА.
-
-# =====================================================================
 # ФУНКЦИИ
 # =====================================================================
 def get_game_number_from_ts(start_ts):
-    """Номер игры от 1 до 1440 по времени старта (startTs)"""
-    if not start_ts:
-        dt = datetime.now(MOSCOW_TZ)
-    else:
-        try:
-            dt = datetime.fromtimestamp(int(start_ts), tz=MOSCOW_TZ)
-        except:
-            dt = datetime.now(MOSCOW_TZ)
+    """
+    Номер игры от 1 до 1440.
+    Считается СТРОГО по текущему времени МСК, а не по startTs игры,
+    чтобы исключить рассинхрон с реальными часами (цикл с 03:00 МСК).
+    """
+    dt = datetime.now(MOSCOW_TZ)
     
+    # Точка отсчета - 03:00 МСК
     start = dt.replace(hour=3, minute=0, second=0, microsecond=0)
+    
+    # Если сейчас меньше 03:00, то отсчет начался вчера
     if dt < start:
         start = start - timedelta(days=1)
+        
     diff_minutes = (dt - start).total_seconds() / 60
-    game_number = int(diff_minutes) % 1440 + 1
+    game_number = int(diff_minutes) + 1  # +1, чтобы первая игра была №1
+    
+    # Защита от переполнения (хотя 1440 минут = ровно сутки)
+    if game_number > 1440:
+        game_number = (game_number - 1) % 1440 + 1
+        
     return int(game_number)
 
 def get_active_games():
@@ -278,17 +280,12 @@ def main():
                 
                 print(f"🃏 {game_id}: P={len(player_cards)} карт, B={len(dealer_cards)} карт, state={state}", flush=True)
                 
-                # ===== ПРОПУСК ИГРЫ, ЕСЛИ КАРТ ЕЩЕ НЕТ (без отправки сообщения) =====
+                # ===== ПРОПУСК ИГРЫ, ЕСЛИ КАРТ ЕЩЕ НЕТ =====
                 if not player_cards and not dealer_cards:
-                    if game_id not in game_numbers:
-                        start_ts = game.get("startTs", 0)
-                        game_numbers[game_id] = get_game_number_from_ts(start_ts)
                     continue
                 
-                if game_id not in game_numbers:
-                    start_ts = game.get("startTs", 0)
-                    game_numbers[game_id] = get_game_number_from_ts(start_ts)
-                game_number = game_numbers[game_id]
+                # Привязка номера игры к текущему времени
+                game_number = get_game_number_from_ts(None)
                 
                 p1_str = json.dumps(player_cards, sort_keys=True)
                 p2_str = json.dumps(dealer_cards, sort_keys=True)
@@ -320,7 +317,6 @@ def main():
                 
                 if is_game_finished(state, player_cards, dealer_cards, p_score, d_score):
                     # ⚠️ ЗАПИСЬ В ФАЙЛЫ ОТКЛЮЧЕНА
-                    # save_finished_game(...) — убрано
                     
                     processed_games.add(game_id)
                     print(f"🏁 Игра {game_id} завершена (state={state}, p_score={p_score}, d_score={d_score})", flush=True)
